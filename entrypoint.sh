@@ -1,29 +1,39 @@
 #!/bin/sh
 usage(){
-cat<<USAGE
+cat<<'USAGE'
 
 Usage:
-  docker run --rm base16-builder-go
-
-Flags:
-  -h, --help            help for build
-      --ignore-errors   Don't exit on error if possible to continue
-
-Global Flags:
-      --schemes-dir string     Target directory for scheme data (default "./schemes/")
-      --sources-dir string     Target directory for source repos (default "./sources/")
-      --templates-dir string   Target directory for template data (default "./templates/")
-      --verbose                Log all debug messages
+  docker run --rm base16-builder-go [help]
+  eval "$(docker run --rm base16-builder-go scheme.yaml template)"
+  eval "$(docker run --rm base16-builder-go shell scheme.yaml template)"
+  docker run --rm -it base16-builder-go ash
 USAGE
 }
 
 _vars(){
-    scheme="${1:-}"
-    template="${2:-}"
-    extension="${scheme##*.}"
-    template_file="$(basename "${template}")"
-    scheme_path="/scheme/in.${extension}"
+    scheme="$(relpath "${1:-}")"
+    template="$(relpath "${2:-}")"
+    #scheme_extension="${scheme##*.}"
+    #scheme_file="in.${scheme_extension}"
+    scheme_file="in.yaml"
+    #template_extension="${template##*.}"
+    #template_file="default.${template_extension}"
+    template_file="default.mustache"
+    scheme_path="/scheme/${scheme_file}"
     template_path="/template/${template_file}"
+}
+
+relpath(){
+    rel="$1"
+    # shellcheck disable=SC2088
+    case "$rel" in 
+        '/'* )
+            echo "$rel"
+            ;;
+        * )
+            echo "\$PWD/$rel"
+            ;;
+    esac
 }
 
 hint_main(){
@@ -46,8 +56,8 @@ docker run \\
        --rm \\
        --interactive \\
        --tty \\
-       --volume "${scheme}:/scheme/in.${extension}" \\
-       --volume "${template}:/template/${template_file}" \\
+       --volume "${scheme}:${scheme_path}" \\
+       --volume "${template}:${template_path}" \\
        --entrypoint ash \\
        base16-builder-go
 HINT
