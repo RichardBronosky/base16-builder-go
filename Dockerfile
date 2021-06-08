@@ -1,63 +1,73 @@
 FROM golang:alpine AS builder
-
 RUN go get github.com/belak/base16-builder-go
 
 FROM alpine:latest
-
 MAINTAINER Bruno Bronosky bruno@bronosky.com
-
 COPY --from=builder /go/bin/base16-builder-go /usr/local/bin
+WORKDIR /
 
-RUN mkdir -p /sources/schemes /sources/templates /templates/in/templates /templates/in/output /schemes/in
-RUN printf "in: https://github.com/chriskempson/base16""\n" \
+RUN mkdir -p /sources/schemes /sources/templates /templates/in/templates /templates/in/output /schemes/in && \
+    printf "in: https://github.com/chriskempson/base16""\n" \
     | tee /sources/schemes/list.yaml \
-    | tee /sources/templates/list.yaml
-RUN printf "%s\n%s\n%s\n" \
+    | tee /sources/templates/list.yaml && \
+    printf "%s\n%s\n%s\n" \
         "default:" \
         "  extension: .txt" \
         "  output: output" \
-    | tee /templates/in/templates/config.yaml
-RUN ln -s /templates/in/templates /template
-RUN ln -s /schemes/in /scheme
+    | tee /templates/in/templates/config.yaml && \
+    ln -s /templates/in/templates /template && \
+    ln -s /schemes/in /scheme
 
-#COPY entrypoint.sh /usr/local/bin/
 COPY Dockerfile /Dockerfile
-RUN < /Dockerfile \
-      awk '/[#]###_BEGIN_ENTRYPOINT_####/{p=1;next} /####_END_ENTRYPOINT_####/{p=0} p==1{sub("^..",""); print}' \
-      > /usr/local/bin/entrypoint.sh && \
-    chmod 755 /usr/local/bin/entrypoint.sh
-
-WORKDIR /
+RUN eval "$( \
+        < Dockerfile \
+        sed \
+        -E \
+        ' \
+          /[#]extract_entrypoint/!d \
+          s/^[# ]+// \
+        ' \
+    )"
 
 ENTRYPOINT [ "/usr/local/bin/entrypoint.sh" ]
 
 ####_BEGIN_ENTRYPOINT_####
 # #!/bin/sh
 # usage(){
-# cat<<USAGE
+# cat<<'USAGE'
 # 
 # Usage:
-#   docker run --rm base16-builder-go
-# 
-# Flags:
-#   -h, --help            help for build
-#       --ignore-errors   Don't exit on error if possible to continue
-# 
-# Global Flags:
-#       --schemes-dir string     Target directory for scheme data (default "./schemes/")
-#       --sources-dir string     Target directory for source repos (default "./sources/")
-#       --templates-dir string   Target directory for template data (default "./templates/")
-#       --verbose                Log all debug messages
+#   docker run --rm base16-builder-go [help]
+#   eval "$(docker run --rm base16-builder-go scheme.yaml template)"
+#   eval "$(docker run --rm base16-builder-go shell scheme.yaml template)"
+#   docker run --rm -it base16-builder-go ash
 # USAGE
 # }
 # 
 # _vars(){
-#     scheme="${1:-}"
-#     template="${2:-}"
-#     extension="${scheme##*.}"
-#     template_file="$(basename "${template}")"
-#     scheme_path="/scheme/in.${extension}"
+#     scheme="$(relpath "${1:-}")"
+#     template="$(relpath "${2:-}")"
+#     #scheme_extension="${scheme##*.}"
+#     #scheme_file="in.${scheme_extension}"
+#     scheme_file="in.yaml"
+#     #template_extension="${template##*.}"
+#     #template_file="default.${template_extension}"
+#     template_file="default.mustache"
+#     scheme_path="/scheme/${scheme_file}"
 #     template_path="/template/${template_file}"
+# }
+# 
+# relpath(){
+#     rel="$1"
+#     # shellcheck disable=SC2088
+#     case "$rel" in
+#         '/'* )
+#             echo "$rel"
+#             ;;
+#         * )
+#             echo "\$PWD/$rel"
+#             ;;
+#     esac
 # }
 # 
 # hint_main(){
@@ -80,8 +90,8 @@ ENTRYPOINT [ "/usr/local/bin/entrypoint.sh" ]
 #        --rm \\
 #        --interactive \\
 #        --tty \\
-#        --volume "${scheme}:/scheme/in.${extension}" \\
-#        --volume "${template}:/template/${template_file}" \\
+#        --volume "${scheme}:${scheme_path}" \\
+#        --volume "${template}:${template_path}" \\
 #        --entrypoint ash \\
 #        base16-builder-go
 # HINT
@@ -140,4 +150,6 @@ ENTRYPOINT [ "/usr/local/bin/entrypoint.sh" ]
 #         fi
 #         ;;
 # esac
+# 
+# #     < Dockerfile awk '/[#]###_BEGIN_ENTRYPOINT_####/{p=1;next} /[#]###_END_ENTRYPOINT_####/{p=0} p==1{sub("^..",""); print}' > /usr/local/bin/entrypoint.sh && chmod 755 /usr/local/bin/entrypoint.sh #extract_entrypoint
 ####_END_ENTRYPOINT_####
